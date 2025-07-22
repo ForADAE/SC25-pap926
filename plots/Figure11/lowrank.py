@@ -12,10 +12,10 @@ font_size = 20
 legend_font_size = 20
 
 kami_paths = {
-    "KAMI-1D": "../../logs/block_gemm/lowrank/GH200/fp16_block_lowrank_H200.csv"
+    "KAMI-1D": "../../logs/block_gemm/lowrank/H200/fp16_block_lowrank_H200.csv"
 }
-cublasdx_path = "../../logs/block_gemm/lowrank/GH200/cublasdx.csv"
-cutlass_path = "../../logs/block_gemm/lowrank/GH200/CUTLASS.csv"
+cublasdx_path = "../../logs/block_gemm/lowrank/H200/cublasdx.csv"
+cutlass_path = "../../logs/block_gemm/lowrank/H200/CUTLASS.csv"
 
 cublasdx_df = pd.read_csv(cublasdx_path, header=None)
 cublasdx_df.columns = ["m", "n", "k", "blocksize", "gflops", "tflops"]

@@ -110,9 +110,10 @@ run_cutlass_test() {
 
     nvcc -std=c++17 -arch=sm_90a --expt-relaxed-constexpr -lcublas -O3 --ptxas-options=-v -lineinfo \
         -Iutil/include -Iinclude \
-        -I./googletest/googletest/include  \
-        -L./googletest/build/lib \
-        -lgtest -lgtest_main \
+        -Igoogletest/include \
+        googletest/libgtest.a \
+        googletest/libgtest_main.a \
+        -lpthread \
         $(for param in $config; do echo "-D$param"; done) -o fp64_mma_multistage fp64_mma_multistage.cu
 
     if [ $? -eq 0 ]; then
@@ -140,12 +141,12 @@ CONFIGS=(
 echo "" >"../logs/block_gemm/square/H200/fp64_CUTLASS.log"
 echo "" >"../logs/block_gemm/square/H200/fp64_CUTLASS.csv"
 cd ../src/block_gemm/CUTLASS/googletest
-rm -rf build 
-mkdir build 
-cd build
-cmake ..
-make -j$(nproc) 
-cd ../../../../../scripts
+g++ -std=c++17 -O2 -I include -I . -c src/gtest-all.cc -o gtest-all.o
+ar rcs libgtest.a gtest-all.o
+
+g++ -std=c++17 -O2 -I include -I . -c src/gtest_main.cc -o gtest_main.o
+ar rcs libgtest_main.a gtest_main.o
+cd ../../../../scripts
 for config in "${CONFIGS[@]}"; do
     run_cutlass_test "$config" "../src/block_gemm/CUTLASS" "../../../logs/block_gemm/square/H200/fp64_CUTLASS"
 done
