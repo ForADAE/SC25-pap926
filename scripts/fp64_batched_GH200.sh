@@ -52,51 +52,44 @@ else
     echo "WARNING: /opt/intel/oneapi/setvars.sh not found. oneAPI environment not set."
 fi
 
-if [ -n "$MKLROOT" ]; then
-    MKL_INCLUDE="$MKLROOT/include"
-    MKL_LIB="$MKLROOT/lib/intel64"
-    echo "MKLROOT = $MKLROOT"
-    echo "MKL_INCLUDE = $MKL_INCLUDE"
-    echo "MKL_LIB = $MKL_LIB"
-else
-    echo "WARNING: MKLROOT not set. MKL_INCLUDE and MKL_LIB will be empty."
-fi
-
-MAGMA_DIR=$(find ~ -type d -name "magma-2.9.0" 2>/dev/null | head -n 1)
-if [ -z "$MAGMA_DIR" ]; then
-    echo "MAGMA 2.9.0 directory not found under ~, skipping MAGMA tests." | tee -a "$magma_log_file"
-else
-    echo "Found MAGMA 2.9.0 at: $MAGMA_DIR" | tee -a "$magma_log_file"
-    cd "${base_dir}/../src/batched_gemm/MAGMA"
-    echo "Compiling testing_dgemm_batched..." | tee -a "$magma_log_file"
-    g++ -O3 -fPIC -fopenmp -DNDEBUG -DADD_ -Wall -Wno-strict-aliasing -Wshadow -DMAGMA_WITH_MKL -std=c++11 \
-    -I"$CUDA_INCLUDE" \
-    -I"$MKL_INCLUDE" \
-    -I"$MAGMA_DIR/include" \
-    -I"$MAGMA_DIR/testing" \
-    ./testing_dgemm_batched.cpp -o testing_dgemm_batched \
-    -L"$MAGMA_DIR/testing" \
-    -L"$MAGMA_DIR/lib" \
-    -L"$MAGMA_DIR/testing/lin" \
-    -L"$CUDA_LIB" \
-    -L"$MKL_LIB" \
-    -ltest -lmagma -llapacktest -lmkl_gf_lp64 -lmkl_gnu_thread -lmkl_core \
-    -lpthread -lstdc++ -lm -lgfortran -lcublas -lcusparse -lcudart -lcudadevrt \
-    -Wl,-rpath,"$MAGMA_DIR/lib" -Wl,-rpath,"$MKL_LIB" >>"$magma_log_file" 2>&1
-    if [ ! -f ./testing_dgemm_batched ]; then
-        echo "Compilation of testing_dgemm_batched failed." | tee -a "$magma_log_file"
+MAGMA_PARENT_DIR="${base_dir}/../src/batched_gemm/MAGMA"
+MAGMA_ZIP="${MAGMA_PARENT_DIR}/magma-2.9.0.zip"
+MAGMA_DIR="${MAGMA_PARENT_DIR}/magma-2.9.0"
+TESTING_DIR="${MAGMA_DIR}/testing"
+export GPU_TARGET=sm_90a
+if [ ! -d "$MAGMA_DIR" ]; then
+    if [ -f "$MAGMA_ZIP" ]; then
+        echo "Unzipping MAGMA package..." | tee -a "$magma_log_file"
+        unzip "$MAGMA_ZIP" -x "__MACOSX/*" -d "$MAGMA_PARENT_DIR" >>"$magma_log_file" 2>&1
     else
-        echo "Compilation successful. Running testing_dgemm_batched..." | tee -a "$magma_log_file"
-        for batch in "${batchnum_list[@]}"; do
-            for n in "${block_sizes[@]}"; do
-                echo "Running testing_dgemm_batched with batch=$batch, n=$n" | tee -a "$magma_log_file"
-                ./testing_dgemm_batched --batch "$batch" -n "$n" >>"$magma_log_file" 2>&1
-                echo "----------------------------------------" >>"$magma_log_file"
-            done
-        done
-        echo "testing_dgemm_batched tests completed." | tee -a "$magma_log_file"
+        echo "MAGMA zip file not found at $MAGMA_ZIP. Cannot proceed with compilation." | tee -a "$magma_log_file"
+        exit 1
     fi
 fi
+chmod +x "${MAGMA_DIR}/tools/codegen.py"
+
+cd "$TESTING_DIR" || {
+    echo "Failed to enter directory: $TESTING_DIR" | tee -a "$magma_log_file"
+    exit 1
+}
+
+echo "Compiling testing_dgemm_batched ..." | tee -a "$magma_log_file"
+make -j"$(nproc)" >>"$magma_log_file" 2>&1
+
+if [ ! -f ./testing_dgemm_batched ]; then
+    echo "Compilation failed: testing_dgemm_batched was not generated." | tee -a "$magma_log_file"
+    exit 1
+else
+    echo "Compilation successful! Running tests..." | tee -a "$magma_log_file"
+fi
+
+for batch in "${batchnum_list[@]}"; do
+    for n in "${block_sizes[@]}"; do
+        echo "Running: batch=$batch, n=$n" | tee -a "$magma_log_file"
+        ./testing_dgemm_batched --batch "$batch" -n "$n" >>"$magma_log_file" 2>&1
+        echo "----------------------------------------" >>"$magma_log_file"
+    done
+done
 
 cd "$base_dir" || exit
 
